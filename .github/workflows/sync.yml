@@ -12,31 +12,60 @@ jobs:
   mirror:
     runs-on: ubuntu-latest
     steps:
-      - name: clone codeberg and push to this repo
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+      - uses: actions/checkout@v4
+
+      - name: fetch upstream
         run: |
           set -euo pipefail
-          rem="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+          git clone https://codeberg.org/mingjiu/cpa-multi-plugins.git /tmp/up
+          cd /tmp/up
+          echo "HEAD=$(git rev-parse HEAD)"
+          echo "COMMITS=$(git rev-list --count HEAD)"
+          echo "TAGS=$(git tag | wc -l)"
+          git log -1 --format='%H %ci %s'
 
-          git clone --mirror https://codeberg.org/mingjiu/cpa-multi-plugins.git repo.git
-          cd repo.git
+      - name: sync files and record state
+        run: |
+          set -euo pipefail
+          cd /tmp/up
+          SHA=$(git rev-parse HEAD)
+          SHORT=$(git rev-parse --short HEAD)
+          COMMITS=$(git rev-list --count HEAD)
+          TAGS=$(git tag | wc -l)
+          LATEST_TAG=$(git tag --sort=-creatordate | head -1)
+          SUBJECT=$(git log -1 --format='%s')
+          cd "$GITHUB_WORKSPACE"
 
-          echo "--- 上游分支"
-          git for-each-ref --format='%(refname)' refs/heads | head -20
-          echo "--- 上游 tag 数"
-          git tag | wc -l
-          echo "--- 上游 HEAD"
-          git log -1 --format='%H %ci %s' refs/heads/main
+          rsync -a --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            /tmp/up/ ./
 
-          # 上游默认分支推成 mirror；其余分支推成 mirror-<名字>
-          git push --force "$rem" refs/heads/main:refs/heads/mirror
-          for b in $(git for-each-ref --format='%(refname:short)' refs/heads | grep -v '^main$'); do
-            git push --force "$rem" "refs/heads/$b:refs/heads/mirror-$(echo "$b" | tr '/' '-')"
-          done
+          python3 - "$SHA" "$SHORT" "$COMMITS" "$TAGS" "$LATEST_TAG" "$SUBJECT" <<'PY'
+          import json, sys, datetime
+          sha, short, commits, tags, latest, subject = sys.argv[1:7]
+          data = {
+              "source": "https://codeberg.org/mingjiu/cpa-multi-plugins",
+              "branch": "main",
+              "commit": sha,
+              "short": short,
+              "commits": int(commits),
+              "tag_count": int(tags),
+              "latest_tag": latest,
+              "subject": subject,
+              "fetched_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+          open("upstream.json", "w", encoding="utf-8").write(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+          PY
 
-          # 标签全量同步
-          git push --force --tags "$rem"
-
-          echo "MIRROR_DONE $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      - name: commit
+        run: |
+          git config user.name "upstream-mirror-bot"
+          git config user.email "upstream-mirror-bot@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "no change"
+          else
+            git commit -m "mirror $(git -C /tmp/up rev-parse --short HEAD) $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
