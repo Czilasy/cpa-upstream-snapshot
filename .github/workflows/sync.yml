@@ -1,0 +1,41 @@
+name: sync-upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: fetch from codeberg
+        run: |
+          set -u
+          BASE="https://codeberg.org/mingjiu/cpa-multi-plugins/raw/branch/main"
+          mkdir -p plugins
+          fail=0
+          for id in qoder trae workbuddy; do
+            code=$(curl -sS -o "plugins/$id.main.go" -w "%{http_code}" --max-time 40 "$BASE/plugins/$id/main.go" || echo "000")
+            echo "$id -> HTTP $code"
+            [ "$code" = "200" ] || fail=1
+          done
+          code=$(curl -sS -o registry.json -w "%{http_code}" --max-time 40 "$BASE/registry.json" || echo "000")
+          echo "registry.json -> HTTP $code"
+          [ "$code" = "200" ] || fail=1
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > fetched_at.txt
+          echo "FAIL=$fail" >> $GITHUB_ENV
+          exit $fail
+
+      - name: commit snapshot
+        run: |
+          git config user.name "upstream-sync-bot"
+          git config user.email "upstream-sync-bot@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
