@@ -1,4 +1,4 @@
-name: sync-upstream
+name: mirror-upstream
 
 on:
   workflow_dispatch:
@@ -9,33 +9,34 @@ permissions:
   contents: write
 
 jobs:
-  sync:
+  mirror:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: fetch from codeberg
+      - name: clone codeberg and push to this repo
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          set -u
-          BASE="https://codeberg.org/mingjiu/cpa-multi-plugins/raw/branch/main"
-          mkdir -p plugins
-          fail=0
-          for id in qoder trae workbuddy; do
-            code=$(curl -sS -o "plugins/$id.main.go" -w "%{http_code}" --max-time 40 "$BASE/plugins/$id/main.go" || echo "000")
-            echo "$id -> HTTP $code"
-            [ "$code" = "200" ] || fail=1
+          set -euo pipefail
+          rem="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+
+          git clone --mirror https://codeberg.org/mingjiu/cpa-multi-plugins.git repo.git
+          cd repo.git
+
+          echo "--- 上游分支"
+          git for-each-ref --format='%(refname)' refs/heads | head -20
+          echo "--- 上游 tag 数"
+          git tag | wc -l
+          echo "--- 上游 HEAD"
+          git log -1 --format='%H %ci %s' refs/heads/main
+
+          # 上游默认分支推成 mirror；其余分支推成 mirror-<名字>
+          git push --force "$rem" refs/heads/main:refs/heads/mirror
+          for b in $(git for-each-ref --format='%(refname:short)' refs/heads | grep -v '^main$'); do
+            git push --force "$rem" "refs/heads/$b:refs/heads/mirror-$(echo "$b" | tr '/' '-')"
           done
-          code=$(curl -sS -o registry.json -w "%{http_code}" --max-time 40 "$BASE/registry.json" || echo "000")
-          echo "registry.json -> HTTP $code"
-          [ "$code" = "200" ] || fail=1
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > fetched_at.txt
-          echo "FAIL=$fail" >> $GITHUB_ENV
-          exit $fail
 
-      - name: commit snapshot
-        run: |
-          git config user.name "upstream-sync-bot"
-          git config user.email "upstream-sync-bot@users.noreply.github.com"
-          git add -A
-          git diff --staged --quiet || git commit -m "sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push
+          # 标签全量同步
+          git push --force --tags "$rem"
+
+          echo "MIRROR_DONE $(date -u +%Y-%m-%dT%H:%M:%SZ)"
