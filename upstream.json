@@ -1,0 +1,11 @@
+{
+  "source": "https://codeberg.org/mingjiu/cpa-multi-plugins",
+  "branch": "main",
+  "commit": "decfe50d17b7fd5de2705e784d6272026cc89954",
+  "short": "decfe50",
+  "commits": 329,
+  "tag_count": 89,
+  "latest_tag": "v0.8.97",
+  "subject": "chore(backup): GitHub main snapshot at v0.8.97 (724bac8) mirrored to Codeberg",
+  "fetched_at": "2026-11-16T04:36:32Z"
+}

@@ -1,0 +1,61 @@
+# Compiled plugins (binaries)
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Go build artifacts
+plugins/*/bin/
+plugins/*/dist/
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+.env
+.env.local
+*.key
+*.pem
+auths/
+data/
+
+# Compiled plugin binaries (go build output in plugin dirs)
+plugins/workbuddy/workbuddy
+plugins/codebuddy-intl/codebuddy-intl
+plugins/trae-cn/trae-cn
+plugins/trae-solo-cn/trae-solo-cn
+plugins/trae-intl/trae-intl
+plugins/qoder-cn/qoder-cn
+plugins/qoder-intl/qoder-intl
+
+# go build ./... stray binaries
+plugins/qoder/qoder
+plugins/trae/trae
+plugins/workbuddy/workbuddy
+
+# Local probe tools (kept out of the repo by convention — dev-only helpers)
+plugins/trae/modelsprobe
+plugins/trae/tools/
+plugins/mimo/mimo
+plugins/mimo/mimo.so
+plugins/mimo/mimo.h
+
+# magpie monitor local-run state (CI keeps its state on the tracking issue)
+scripts/magpie_monitor_state.json
+
+# python bytecode
+__pycache__/
+*.pyc
